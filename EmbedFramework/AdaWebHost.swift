@@ -44,7 +44,8 @@ public class AdaWebHost: NSObject {
     public var greeting = ""
     public var deviceToken = ""
     public var webViewTimeout = 30.0
-    
+    public var shouldInterceptUrl: (_ url: URL) -> Bool
+    public var interceptedUrlAction: (_ url: URL) -> Void
     
     /// Metafields can be passed in during init; use `setMetaFields()` and `setSensitiveMetafields()`
     /// to send values in at runtime
@@ -105,7 +106,9 @@ public class AdaWebHost: NSObject {
         eventCallbacks: [String: (_ event: [String: Any]) -> Void]? = nil,
         webViewTimeout: Double = 30.0,
         deviceToken: String = "",
-        navigationBarOpaqueBackground: Bool = false
+        navigationBarOpaqueBackground: Bool = false,
+        shouldInterceptUrl: @escaping (_ url: URL) -> Bool,
+        interceptedUrlAction: @escaping (_ url: URL) -> Void
     ) {
         self.handle = handle
         self.cluster = cluster
@@ -127,6 +130,8 @@ public class AdaWebHost: NSObject {
         self.hasError = false
         self.deviceToken = deviceToken
         self.navigationBarOpaqueBackground = navigationBarOpaqueBackground
+        self.shouldInterceptUrl = shouldInterceptUrl
+        self.interceptedUrlAction = interceptedUrlAction
     
         self.reachability = Reachability()!
         super.init()
@@ -417,9 +422,15 @@ extension AdaWebHost: WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
     public func openUrl(webView: WKWebView, url: URL) -> Swift.Void {
         let httpSchemes = ["http", "https"]
         let urlScheme = url.scheme
+        // intercept any URL that meets your criteria
+        if shouldInterceptUrl(url) == true {
+            guard let presentingVC = findViewController(from: webView) else { return }
+            presentingVC.dismiss(animated: true) { [weak self] in
+                self?.interceptedUrlAction(url)
+            }
         // Handle opening universal links within the host App
         // This requires the appScheme argument to work
-        if urlScheme == self.appScheme {
+        } else if urlScheme == self.appScheme {
             guard let presentingVC = findViewController(from: webView) else { return }
             presentingVC.dismiss(animated: true) {
                 let shared = UIApplication.shared
